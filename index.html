@@ -7,35 +7,32 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // 定義路由資料
+            // 定義路由資料 (更新為單一目標)
             const routes = [
                 {
                     path: "/",
                     type: "Proxy",
                     color: "blue",
-                    description: "根目錄代理。根據 IP 轉發至 GAS (內網) 或 Vercel (外網)。",
-                    internalDest: "Google Apps Script",
-                    externalDest: "Vercel App"
+                    description: "根目錄代理。所有流量統一轉發至 Vercel。",
+                    dest: "Vercel App"
                 },
                 {
                     path: "/dr",
                     type: "Redirect",
                     color: "amber",
-                    description: "直接轉址模式。回傳 HTTP 302 跳轉至目標網址。",
-                    internalDest: "Google Apps Script",
-                    externalDest: "Vercel App"
+                    description: "直接轉址模式。回傳 HTTP 302 跳轉至 Vercel。",
+                    dest: "Vercel App"
                 },
                 {
-                    path: "/static/*",
-                    type: "Asset",
-                    color: "green",
-                    description: "靜態資源代理。僅限內網 IP 存取 GAS 資源。",
-                    internalDest: "script.google.com/static/...",
-                    externalDest: "N/A (Forbidden)"
+                    path: "/*",
+                    type: "Wildcard",
+                    color: "purple",
+                    description: "全域路徑代理。任何子路徑皆轉發至 Vercel。",
+                    dest: "Vercel App"
                 }
             ];
 
-            // 內網判斷邏輯 (前端僅供顯示參考，實際邏輯在後端)
+            // 內網判斷邏輯 (僅供 Dashboard 顯示資訊用，不影響路由)
             const checkInternal = (ip) => {
                 const subnets = ['60.249.9.', '60.249.21.', '203.69.10.'];
                 return subnets.some(subnet => ip.startsWith(subnet));
@@ -54,9 +51,9 @@
                         ipDisplay.innerText = ip;
                         
                         if (checkInternal(ip)) {
-                            statusDisplay.innerHTML = '<span class="text-emerald-600 font-bold">● 內部網路 (Internal)</span>';
+                            statusDisplay.innerHTML = '<span class="text-emerald-600 font-bold">● 內部 IP (已列入白名單)</span>';
                         } else {
-                            statusDisplay.innerHTML = '<span class="text-pink-600 font-bold">● 外部網路 (External)</span>';
+                            statusDisplay.innerHTML = '<span class="text-slate-500 font-bold">● 外部 IP</span>';
                         }
                     }
                 })
@@ -71,13 +68,13 @@
                 let badgeClass = '';
                 if (route.type === 'Proxy') badgeClass = 'bg-blue-100 text-blue-700';
                 else if (route.type === 'Redirect') badgeClass = 'bg-amber-100 text-amber-700';
-                else badgeClass = 'bg-green-100 text-green-700';
+                else badgeClass = 'bg-purple-100 text-purple-700';
 
                 const debugLink = route.path.includes('*') 
                     ? '' 
                     : `<a href="${route.path === '/' ? '/?debug=true' : route.path + '?debug=true'}" target="_blank" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 px-2 py-1 rounded">Debug &rarr;</a>`;
 
-                card = document.createElement('div');
+                const card = document.createElement('div');
                 card.className = 'bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden';
                 card.innerHTML = `
                     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -89,13 +86,9 @@
                     </div>
                     <div class="p-6">
                         <p class="text-slate-600 text-sm mb-4">${route.description}</p>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="text-xs p-2 bg-emerald-50 border border-emerald-100 rounded">
-                                <span class="font-bold text-emerald-700">內網去向:</span><br>${route.internalDest}
-                            </div>
-                            <div class="text-xs p-2 bg-pink-50 border border-pink-100 rounded">
-                                <span class="font-bold text-pink-700">外網去向:</span><br>${route.externalDest}
-                            </div>
+                        <div class="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded flex items-center">
+                            <span class="font-bold text-slate-700 mr-2">目標 (Target):</span>
+                            <span class="text-slate-900 font-mono">${route.dest}</span>
                         </div>
                     </div>
                 `;
@@ -110,7 +103,8 @@
         <div class="max-w-4xl mx-auto">
             <header class="text-center mb-10">
                 <h1 class="text-3xl font-extrabold text-slate-900 mb-2">路由轉發控制台</h1>
-                <div class="inline-block bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 text-sm text-left">
+                <p class="text-slate-500 text-sm">統一轉發模式 (Unified Vercel Forwarding)</p>
+                <div class="mt-4 inline-block bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 text-sm text-left">
                     <div>您的 IP: <span class="font-mono font-bold text-slate-700" id="user-ip">檢測中...</span></div>
                     <div id="user-status" class="mt-1 text-xs">檢測中...</div>
                 </div>
@@ -121,15 +115,15 @@
             <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-6">
                 <h3 class="font-bold text-indigo-900 mb-4">快速測試工具</h3>
                 <div class="flex flex-wrap gap-3">
-                    <a href="/?debug=true" target="_blank" class="px-4 py-2 bg-white text-indigo-600 text-sm font-medium rounded border border-indigo-200 hover:bg-indigo-50">檢查根目錄路由</a>
-                    <a href="/dr?debug=true" target="_blank" class="px-4 py-2 bg-white text-amber-600 text-sm font-medium rounded border border-amber-200 hover:bg-amber-50">檢查 /dr 路由</a>
+                    <a href="/?debug=true" target="_blank" class="px-4 py-2 bg-white text-indigo-600 text-sm font-medium rounded border border-indigo-200 hover:bg-indigo-50">檢查轉發 (Root)</a>
+                    <a href="/dr?debug=true" target="_blank" class="px-4 py-2 bg-white text-amber-600 text-sm font-medium rounded border border-amber-200 hover:bg-amber-50">檢查轉址 (/dr)</a>
                     <a href="/dashboard" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700">重新載入儀表板</a>
                 </div>
             </div>
 
             <footer class="mt-10 text-center text-xs text-slate-400">
-                <p>白名單網段: <span class="font-mono">60.249.9.0/24</span>, <span class="font-mono">60.249.21.0/24</span>, <span class="font-mono">203.69.10.0/24</span></p>
-                <p>若要存取此頁面，請使用 <a href="/dashboard" class="underline">/dashboard</a> 路徑</p>
+                <p>目前系統設定：所有流量 (內網/外網) 皆轉發至 Vercel</p>
+                <p>白名單 IP 僅供識別參考</p>
             </footer>
         </div>
     </div>
