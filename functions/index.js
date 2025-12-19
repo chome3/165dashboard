@@ -1,4 +1,4 @@
-// functions/index.js
+// functions/proxy.js
 
 function ipToInt(ip) {
   return ip.split('.').reduce((acc, part) => (acc << 8) + Number(part), 0) >>> 0;
@@ -24,7 +24,7 @@ export async function onRequest(context) {
   const gasUrl = 'https://script.google.com/a/*/macros/s/AKfycbzSwrTccdwz9bH2CwzUoWAIs51IdmKoHF00c7syhKK9BPaSEamuT1ON_DVXpZlKXy_z/exec';
   const vercelUrl = 'https://fraud-analysis-dashboard.vercel.app';
 
-  // debug: /?debug=true
+  // debug：/proxy?debug=true
   if (url.searchParams.get('debug') === 'true') {
     return new Response(
       `IP: ${ip}\n` +
@@ -34,7 +34,7 @@ export async function onRequest(context) {
     );
   }
 
-  // debug-headers: /?debug-headers=true
+  // debug-headers：/proxy?debug-headers=true
   if (url.searchParams.get('debug-headers') === 'true' && isInternalIP) {
     const targetUrl = gasUrl + url.search.replace('&debug-headers=true', '').replace('?debug-headers=true', '');
     const response = await fetch(targetUrl);
@@ -50,10 +50,10 @@ export async function onRequest(context) {
   }
 
   if (isInternalIP) {
-    // Internal network -> Proxy to GAS
+    // 內網 → 代理到 GAS
     const targetUrl = gasUrl + url.search;
     
-    // Build clean request headers
+    // 建立乾淨的請求標頭
     const proxyHeaders = new Headers();
     const allowedHeaders = ['accept', 'accept-language', 'user-agent', 'referer'];
     allowedHeaders.forEach(header => {
@@ -71,32 +71,32 @@ export async function onRequest(context) {
     const response = await fetch(modifiedRequest);
     const responseBody = await response.text();
     
-    // Get GAS base URL for fixing relative paths
+    // 取得 GAS 的基礎 URL（用於修正相對路徑）
     const gasBaseUrl = 'https://script.google.com';
     
-    // Fix relative paths in HTML
+    // 修正 HTML 中的相對路徑
     const fixedBody = responseBody
       .replace(/src="\/static\//g, `src="${gasBaseUrl}/static/`)
       .replace(/href="\/static\//g, `href="${gasBaseUrl}/static/`)
       .replace(/src='\/static\//g, `src='${gasBaseUrl}/static/`)
       .replace(/href='\/static\//g, `href='${gasBaseUrl}/static/`);
     
-    // Build new response headers
+    // 建立新的響應標頭
     const responseHeaders = new Headers();
     
-    // Copy necessary headers
+    // 複製必要的標頭
     const importantHeaders = ['content-type', 'cache-control', 'expires'];
     importantHeaders.forEach(header => {
       const value = response.headers.get(header);
       if (value) responseHeaders.set(header, value);
     });
     
-    // Ensure correct Content-Type
+    // 確保 Content-Type 正確
     if (!responseHeaders.has('content-type')) {
       responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
     }
     
-    // Add CORS headers
+    // 添加 CORS 標頭
     responseHeaders.set('Access-Control-Allow-Origin', '*');
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     responseHeaders.set('Access-Control-Allow-Headers', '*');
@@ -107,8 +107,8 @@ export async function onRequest(context) {
       headers: responseHeaders,
     });
   } else {
-    // External network -> Proxy to Vercel
-    const targetUrl = vercelUrl + url.pathname + url.search;
+    // 外網 → 代理到 Vercel
+    const targetUrl = vercelUrl + url.pathname.replace('/proxy', '') + url.search;
     
     const proxyHeaders = new Headers();
     const allowedHeaders = ['accept', 'accept-language', 'content-type', 'user-agent'];
@@ -126,7 +126,7 @@ export async function onRequest(context) {
     
     const response = await fetch(modifiedRequest);
     
-    // For Vercel response, keep as is
+    // 對 Vercel 的回應，保持原樣
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
