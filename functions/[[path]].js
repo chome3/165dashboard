@@ -1,4 +1,4 @@
-// functions/static/[[path]].js
+// functions/[[path]].js
 
 function ipToInt(ip) {
   return ip.split('.').reduce((acc, part) => (acc << 8) + Number(part), 0) >>> 0;
@@ -15,24 +15,31 @@ export async function onRequest(context) {
   const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
   const url = new URL(request.url);
 
-  const cidrs = [
-    '60.249.9.0/24',
-    // '60.249.10.0/24',
-  ];
+  const cidrs = ['60.249.9.0/24'];
   const isInternalIP = cidrs.some(cidr => isInCidr(ip, cidr));
 
-  // 只有內網才代理靜態資源
+  // 只有內網才代理子資源
   if (!isInternalIP) {
     return new Response('Forbidden', { status: 403 });
   }
 
-  // 構建 Google Script 的靜態資源 URL
+  // 構建 Google Script 的完整 URL
   const gasBaseUrl = 'https://script.google.com';
   const targetUrl = gasBaseUrl + url.pathname + url.search;
 
   // 代理請求
   const proxyHeaders = new Headers();
-  const allowedHeaders = ['accept', 'accept-encoding', 'accept-language', 'user-agent', 'referer', 'if-none-match', 'if-modified-since'];
+  const allowedHeaders = [
+    'accept',
+    'accept-encoding',
+    'accept-language',
+    'user-agent',
+    'referer',
+    'if-none-match',
+    'if-modified-since',
+    'cookie'  // 保留 cookie
+  ];
+  
   allowedHeaders.forEach(header => {
     const value = request.headers.get(header);
     if (value) proxyHeaders.set(header, value);
@@ -49,13 +56,14 @@ export async function onRequest(context) {
   // 複製響應標頭
   const responseHeaders = new Headers(response.headers);
   
+  // 移除可能干擾的標頭
+  responseHeaders.delete('X-Frame-Options');
+  responseHeaders.delete('Content-Security-Policy');
+  
   // 添加 CORS 標頭
   responseHeaders.set('Access-Control-Allow-Origin', '*');
-  responseHeaders.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   responseHeaders.set('Access-Control-Allow-Headers', '*');
-
-  // 添加快取標頭（靜態資源可以快取）
-  responseHeaders.set('Cache-Control', 'public, max-age=3600');
 
   return new Response(response.body, {
     status: response.status,

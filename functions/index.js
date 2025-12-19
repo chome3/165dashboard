@@ -15,14 +15,13 @@ export async function onRequest(context) {
   const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
   const url = new URL(request.url);
 
-  const cidrs = [
-    '60.249.9.0/24',
-  ];
+  const cidrs = ['60.249.9.0/24'];
   const isInternalIP = cidrs.some(cidr => isInCidr(ip, cidr));
 
   const gasUrl = 'https://script.google.com/a/*/macros/s/AKfycbzSwrTccdwz9bH2CwzUoWAIs51IdmKoHF00c7syhKK9BPaSEamuT1ON_DVXpZlKXy_z/exec';
   const vercelUrl = 'https://fraud-analysis-dashboard.vercel.app';
 
+  // debug 用
   if (url.searchParams.get('debug') === 'true') {
     return new Response(
       `IP: ${ip}\n` +
@@ -36,7 +35,7 @@ export async function onRequest(context) {
     const targetUrl = gasUrl + url.search;
     
     const proxyHeaders = new Headers();
-    const allowedHeaders = ['accept', 'accept-language', 'user-agent', 'referer'];
+    const allowedHeaders = ['accept', 'accept-language', 'user-agent', 'referer', 'cookie'];
     allowedHeaders.forEach(header => {
       const value = request.headers.get(header);
       if (value) proxyHeaders.set(header, value);
@@ -50,60 +49,26 @@ export async function onRequest(context) {
     });
     
     const response = await fetch(modifiedRequest);
-    const responseBody = await response.text();
     
-    const gasBaseUrl = 'https://script.google.com';
+    // 不修改 HTML，直接返回原始內容
+    const responseHeaders = new Headers(response.headers);
     
-    const fixedBody = responseBody
-      .replace(/src="\/static\//g, `src="${gasBaseUrl}/static/`)
-      .replace(/href="\/static\//g, `href="${gasBaseUrl}/static/`)
-      .replace(/src='\/static\//g, `src='${gasBaseUrl}/static/`)
-      .replace(/href='\/static\//g, `href='${gasBaseUrl}/static/`);
+    // 移除干擾標頭
+    responseHeaders.delete('X-Frame-Options');
+    responseHeaders.delete('Content-Security-Policy');
     
-    const responseHeaders = new Headers();
-    
-    const importantHeaders = ['content-type', 'cache-control', 'expires'];
-    importantHeaders.forEach(header => {
-      const value = response.headers.get(header);
-      if (value) responseHeaders.set(header, value);
-    });
-    
-    if (!responseHeaders.has('content-type')) {
-      responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
-    }
-    
+    // 添加 CORS
     responseHeaders.set('Access-Control-Allow-Origin', '*');
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     responseHeaders.set('Access-Control-Allow-Headers', '*');
     
-    return new Response(fixedBody, {
+    return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: responseHeaders,
     });
   } else {
-    const targetUrl = vercelUrl + url.pathname + url.search;
-    
-    const proxyHeaders = new Headers();
-    const allowedHeaders = ['accept', 'accept-language', 'content-type', 'user-agent'];
-    allowedHeaders.forEach(header => {
-      const value = request.headers.get(header);
-      if (value) proxyHeaders.set(header, value);
-    });
-    
-    const modifiedRequest = new Request(targetUrl, {
-      method: request.method,
-      headers: proxyHeaders,
-      body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
-      redirect: 'follow',
-    });
-    
-    const response = await fetch(modifiedRequest);
-    
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    });
+    // 外網：直接轉向 Vercel（或用代理）
+    return Response.redirect(vercelUrl + url.pathname + url.search, 302);
   }
 }
