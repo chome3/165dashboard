@@ -18,64 +18,56 @@ export async function onRequest(context) {
   const cidrs = ['60.249.9.0/24'];
   const isInternalIP = cidrs.some(cidr => isInCidr(ip, cidr));
 
-  // 只有內網才代理子資源
+  // 只有內網才代理
   if (!isInternalIP) {
     return new Response('Forbidden', { status: 403 });
   }
 
-  // 只代理 GAS 相關的路徑（避免攔截到其他不相關的路徑）
-  const gasResourcePaths = [
-    '/static/',
-    '/userCodeAppPanel',
-    '/wardeninit',
-    '/jserror',
-    '/a/macros/',
-    '/macros/'
-  ];
-
-  const isGasResource = gasResourcePaths.some(prefix => url.pathname.startsWith(prefix));
-
-  if (!isGasResource) {
-    // 不是 GAS 資源，返回 404
-    return new Response('Not Found', { status: 404 });
-  }
-
-  // 構建 Google Script 的完整 URL
+  // 構建完整的 GAS URL
   const gasBaseUrl = 'https://script.google.com';
   const targetUrl = gasBaseUrl + url.pathname + url.search;
 
+  // 複製請求 headers
   const proxyHeaders = new Headers();
-  [
-    'accept',
-    'accept-encoding',
-    'accept-language',
-    'user-agent',
-    'referer',
-    'if-none-match',
-    'if-modified-since',
-    'cookie'
-  ].forEach(header => {
-    const value = request.headers.get(header);
-    if (value) proxyHeaders.set(header, value);
-  });
+  for (const [key, value] of request.headers.entries()) {
+    // 排除 Cloudflare 專屬的 headers
+    if (!key.startsWith('cf-') && key !== 'host') {
+      proxyHeaders.set(key, value);
+    }
+  }
 
-  const modifiedRequest = new Request(targetUrl, {
-    method: request.method,
-    headers: proxyHeaders,
-    redirect: 'follow',
-  });
+  try {
+    const modifiedRequest = new Request(targetUrl, {
+      method: request.method,
+      headers: proxyHeaders,
+      body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
+      redirect: 'follow',
+    });
 
-  const response = await fetch(modifiedRequest);
+    const response = await fetch(modifiedRequest);
 
-  const responseHeaders = new Headers(response.headers);
-  responseHeaders.delete('X-Frame-Options');
-  responseHeaders.delete('Content-Security-Policy');
-  responseHeaders.set('Access-Control-Allow-Origin', '*');
-  responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    // 複製回應 headers
+    const responseHeaders = new Headers(response.headers);
+    
+    // 移除可能干擾的 headers
+    responseHeaders.delete('X-Frame-Options');
+    responseHeaders.delete('Content-Security-Policy');
+    responseHeaders.delete('X-Content-Type-Options');
+    
+    // 添加 CORS
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    responseHeaders.set('Access-Control-Allow-Headers', '*');
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: responseHeaders,
-  });
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    return new Response(`Proxy Error: ${error.message}`, { 
+      status: 502,
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  }
 }
