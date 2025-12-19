@@ -2,7 +2,7 @@
 // 靜態路徑代理 (Unified Vercel Proxy)
 // 原本用於 GAS，現在統一指向 Vercel，避免路徑 404
 
-import { CONFIG } from '../../utils';
+import { CONFIG } from '../utils';
 
 export async function onRequest(context) {
   const request = context.request;
