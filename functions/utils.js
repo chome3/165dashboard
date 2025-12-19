@@ -32,7 +32,7 @@ export const INTERNAL_CIDRS = [
 // 系統配置
 export const CONFIG = {
   // 內部: Google Apps Script (GAS) 執行網址
-  GAS_URL: 'https://script.google.com/a/macros/s/AKfycbzSwrTccdwz9bH2CwzUoWAIs51IdmKoHF00c7syhKK9BPaSEamuT1ON_DVXpZlKXy_z/exec',
+  GAS_URL: 'https://script.google.com/a/*/macros/s/AKfycbzSwrTccdwz9bH2CwzUoWAIs51IdmKoHF00c7syhKK9BPaSEamuT1ON_DVXpZlKXy_z/exec',
   
   // GAS 基礎網址 (用於靜態資源重寫)
   GAS_BASE: 'https://script.google.com',
