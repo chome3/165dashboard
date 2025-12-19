@@ -3,16 +3,16 @@ export async function onRequest(context) {
   const ip = request.headers.get('CF-Connecting-IP');
   const url = new URL(request.url);
   
-  // 判斷是否為內網 IP
-  const isInternalIP = /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(ip);
+  // 判斷是否為你們警局的內網 IP（10.114.80.0/21）
+  const isInternalIP = /^10\.114\.(8[0-7])\.\d{1,3}$/.test(ip);
   
-  // 你的 GAS 和 Vercel URL（請替換成實際網址）
+  // 你的 GAS 和 Vercel URL
   const gasUrl = 'https://script.google.com/a/*/macros/s/AKfycbzSwrTccdwz9bH2CwzUoWAIs51IdmKoHF00c7syhKK9BPaSEamuT1ON_DVXpZlKXy_z/exec';
-  const vercelUrl = 'https://fraud-analysis-dashboard.vercel.app/';
+  const vercelUrl = 'https://fraud-analysis-dashboard.vercel.app';
   
   if (isInternalIP) {
-    // 內網：代理到 GAS
-    const targetUrl = gasUrl + url.search; // 保留查詢參數
+    // 內網（10.114.80.x - 10.114.87.x）：代理到 GAS
+    const targetUrl = gasUrl + url.search;
     
     const modifiedRequest = new Request(targetUrl, {
       method: request.method,
