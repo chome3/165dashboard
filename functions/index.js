@@ -3,7 +3,7 @@ export async function onRequest(context) {
   const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
   const url = new URL(request.url);
 
-  const isInternalIP = ip === '60.249.9.184';  // 辦公室出口 IP
+  const isInternalIP = ip === '60.249.9.184';
 
   const gasUrl = 'https://script.google.com/a/*/macros/s/AKfycbzSwrTccdwz9bH2CwzUoWAIs51IdmKoHF00c7syhKK9BPaSEamuT1ON_DVXpZlKXy_z/exec';
   const vercelUrl = 'https://fraud-analysis-dashboard.vercel.app';
@@ -17,20 +17,10 @@ export async function onRequest(context) {
   }
 
   if (isInternalIP) {
-    const targetUrl = gasUrl + url.search;
-    const modifiedRequest = new Request(targetUrl, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-      redirect: 'follow'
-    });
-    const response = await fetch(modifiedRequest);
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers
-    });
+    // 直接 302 轉向到 GAS（瀏覽器網址會變成 GAS）
+    return Response.redirect(gasUrl + url.search, 302);
   } else {
+    // 外網照舊走 Vercel
     return Response.redirect(vercelUrl + url.pathname + url.search, 302);
   }
 }
