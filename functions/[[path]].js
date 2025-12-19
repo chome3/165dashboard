@@ -7,9 +7,9 @@ export async function onRequest(context) {
   const request = context.request;
   const url = new URL(request.url);
 
-  // 儀表板模式：允許訪問靜態資源 (React App)
+  // 如果使用者在子頁面嘗試開啟儀表板，導回根目錄
   if (url.searchParams.get('dashboard') === 'true') {
-    return context.next();
+    return Response.redirect(`${url.origin}/?dashboard=true`, 302);
   }
 
   const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
@@ -26,89 +26,55 @@ export async function onRequest(context) {
     );
   }
 
+  // 決定目標
+  let targetUrl;
   if (isInternalIP) {
-    // 內部網路 -> GAS
-    const targetUrl = CONFIG.GAS_URL + url.search;
-    
-    const proxyHeaders = new Headers();
-    const allowedHeaders = ['accept', 'accept-language', 'user-agent', 'referer'];
-    allowedHeaders.forEach(header => {
-      const value = request.headers.get(header);
-      if (value) proxyHeaders.set(header, value);
-    });
-    
-    try {
-      const modifiedRequest = new Request(targetUrl, {
-        method: request.method,
-        headers: proxyHeaders,
-        body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
-        redirect: 'follow',
-      });
-      
-      const response = await fetch(modifiedRequest);
-      const responseBody = await response.text();
-      
-      // 重寫 GAS 靜態資源路徑
-      const fixedBody = responseBody
-        .replace(/src="\/static\//g, `src="${CONFIG.GAS_BASE}/static/`)
-        .replace(/href="\/static\//g, `href="${CONFIG.GAS_BASE}/static/`)
-        .replace(/src='\/static\//g, `src='${CONFIG.GAS_BASE}/static/`)
-        .replace(/href='\/static\//g, `href='${CONFIG.GAS_BASE}/static/`);
-      
-      const responseHeaders = new Headers();
-      const importantHeaders = ['content-type', 'cache-control', 'expires'];
-      importantHeaders.forEach(header => {
-        const value = response.headers.get(header);
-        if (value) responseHeaders.set(header, value);
-      });
-      
-      if (!responseHeaders.has('content-type')) {
-        responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
-      }
-      
-      responseHeaders.set('Access-Control-Allow-Origin', '*');
-      
-      return new Response(fixedBody, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders,
-      });
-
-    } catch (error) {
-      return new Response(`GAS Proxy Error: ${error.message}`, { status: 502 });
-    }
-
+    // 內網：除了根目錄，GAS 通常透過 Query Parameter 控制頁面，
+    // 若有特定子路徑需求需在此定義。目前假設全部導向 GAS Exec。
+    targetUrl = CONFIG.GAS_URL + url.search;
   } else {
-    // 外部網路 -> Vercel
-    const targetUrl = CONFIG.VERCEL_URL + url.pathname + url.search;
-    
+    // 外網：將路徑完整傳遞給 Vercel
+    targetUrl = CONFIG.VERCEL_URL + url.pathname + url.search;
+  }
+
+  // 執行代理
+  try {
     const proxyHeaders = new Headers();
-    const allowedHeaders = ['accept', 'accept-language', 'content-type', 'user-agent'];
+    const allowedHeaders = ['accept', 'accept-language', 'content-type', 'user-agent', 'referer'];
     allowedHeaders.forEach(header => {
       const value = request.headers.get(header);
       if (value) proxyHeaders.set(header, value);
     });
     
-    try {
-      const modifiedRequest = new Request(targetUrl, {
-        method: request.method,
-        headers: proxyHeaders,
-        body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
-        redirect: 'follow',
-      });
-      
-      const response = await fetch(modifiedRequest);
-      
-      const responseHeaders = new Headers(response.headers);
-      responseHeaders.set('Access-Control-Allow-Origin', '*');
+    const modifiedRequest = new Request(targetUrl, {
+      method: request.method,
+      headers: proxyHeaders,
+      body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
+      redirect: 'follow',
+    });
+    
+    const response = await fetch(modifiedRequest);
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
 
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders,
-      });
-    } catch (error) {
-       return new Response(`Vercel Proxy Error: ${error.message}`, { status: 502 });
+    // 內網 HTML 修正 (與 index.js 相同邏輯)
+    if (isInternalIP && response.headers.get('content-type')?.includes('text/html')) {
+       const responseBody = await response.text();
+       const fixedBody = responseBody
+            .replace(/src="\/static\//g, `src="${CONFIG.GAS_BASE}/static/`)
+            .replace(/href="\/static\//g, `href="${CONFIG.GAS_BASE}/static/`);
+       return new Response(fixedBody, {
+           status: response.status,
+           headers: responseHeaders
+       });
     }
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+     return new Response(`Proxy Error: ${error.message}`, { status: 502 });
   }
 }

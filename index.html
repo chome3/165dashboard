@@ -13,40 +13,55 @@
                     path: "/",
                     type: "Proxy",
                     color: "blue",
-                    description: "根目錄代理 (Web Root)。根據來源 IP 透明轉發至 GAS (內網) 或 Vercel (外網)。",
-                    internalDest: "Google Apps Script (GAS)",
-                    externalDest: "Vercel Dashboard"
+                    description: "根目錄代理。根據 IP 轉發至 GAS (內網) 或 Vercel (外網)。",
+                    internalDest: "Google Apps Script",
+                    externalDest: "Vercel App"
                 },
                 {
                     path: "/dr",
                     type: "Redirect",
                     color: "amber",
-                    description: "直接轉址 (Direct Redirect)。回傳 HTTP 302 跳轉至對應目標。",
-                    internalDest: "Google Apps Script (GAS)",
-                    externalDest: "Vercel Dashboard"
+                    description: "直接轉址模式。回傳 HTTP 302 跳轉至目標網址。",
+                    internalDest: "Google Apps Script",
+                    externalDest: "Vercel App"
                 },
                 {
                     path: "/static/*",
                     type: "Asset",
                     color: "green",
-                    description: "靜態資源代理。處理 GAS 頁面中的 JS/CSS 檔案引用。",
+                    description: "靜態資源代理。僅限內網 IP 存取 GAS 資源。",
                     internalDest: "script.google.com/static/...",
-                    externalDest: "N/A (禁止存取)"
+                    externalDest: "N/A (Forbidden)"
                 }
             ];
 
-            // 取得使用者 IP (透過 Cloudflare trace)
+            // 內網判斷邏輯 (前端僅供顯示參考，實際邏輯在後端)
+            const checkInternal = (ip) => {
+                const subnets = ['60.249.9.', '60.249.21.', '203.69.10.'];
+                return subnets.some(subnet => ip.startsWith(subnet));
+            };
+
+            // 取得使用者 IP
             const ipDisplay = document.getElementById('user-ip');
+            const statusDisplay = document.getElementById('user-status');
+            
             fetch('https://www.cloudflare.com/cdn-cgi/trace')
                 .then(res => res.text())
                 .then(data => {
                     const ipLine = data.split('\n').find(l => l.startsWith('ip='));
                     if (ipLine) {
-                        ipDisplay.innerText = ipLine.split('=')[1];
+                        const ip = ipLine.split('=')[1];
+                        ipDisplay.innerText = ip;
+                        
+                        if (checkInternal(ip)) {
+                            statusDisplay.innerHTML = '<span class="text-emerald-600 font-bold">● 內部網路 (Internal)</span>';
+                        } else {
+                            statusDisplay.innerHTML = '<span class="text-pink-600 font-bold">● 外部網路 (External)</span>';
+                        }
                     }
                 })
                 .catch(() => {
-                    ipDisplay.innerText = '無法取得 (請檢查連線)';
+                    ipDisplay.innerText = '未知';
                 });
 
             // 渲染路由卡片
@@ -58,15 +73,12 @@
                 else if (route.type === 'Redirect') badgeClass = 'bg-amber-100 text-amber-700';
                 else badgeClass = 'bg-green-100 text-green-700';
 
-                // 建立卡片
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow';
-                
-                // Debug 連結 (僅非靜態資源顯示)
                 const debugLink = route.path.includes('*') 
                     ? '' 
-                    : `<a href="${route.path === '/' ? '/?debug=true' : route.path + '?debug=true'}" target="_blank" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 px-2 py-1 rounded">測試 Debug 模式 &rarr;</a>`;
+                    : `<a href="${route.path === '/' ? '/?debug=true' : route.path + '?debug=true'}" target="_blank" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 px-2 py-1 rounded">Debug &rarr;</a>`;
 
+                card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden';
                 card.innerHTML = `
                     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                         <div class="flex items-center gap-3">
@@ -75,31 +87,14 @@
                         </div>
                         ${debugLink}
                     </div>
-                    
                     <div class="p-6">
-                        <p class="text-slate-600 text-sm mb-6">${route.description}</p>
-                        
-                        <div class="grid md:grid-cols-2 gap-4">
-                            <!-- 內網區塊 -->
-                            <div class="p-4 rounded border border-emerald-100 bg-emerald-50/50">
-                                <h3 class="text-xs font-bold uppercase text-emerald-700 mb-1 flex items-center">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2"></span>
-                                    內網 (Internal)
-                                </h3>
-                                <p class="text-sm font-medium text-emerald-900 truncate" title="${route.internalDest}">
-                                    &rarr; ${route.internalDest}
-                                </p>
+                        <p class="text-slate-600 text-sm mb-4">${route.description}</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-xs p-2 bg-emerald-50 border border-emerald-100 rounded">
+                                <span class="font-bold text-emerald-700">內網去向:</span><br>${route.internalDest}
                             </div>
-
-                            <!-- 外網區塊 -->
-                            <div class="p-4 rounded border border-pink-100 bg-pink-50/50">
-                                <h3 class="text-xs font-bold uppercase text-pink-700 mb-1 flex items-center">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-pink-500 mr-2"></span>
-                                    外網 (External)
-                                </h3>
-                                <p class="text-sm font-medium text-pink-900 truncate" title="${route.externalDest}">
-                                    &rarr; ${route.externalDest}
-                                </p>
+                            <div class="text-xs p-2 bg-pink-50 border border-pink-100 rounded">
+                                <span class="font-bold text-pink-700">外網去向:</span><br>${route.externalDest}
                             </div>
                         </div>
                     </div>
@@ -108,63 +103,36 @@
             });
         });
     </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans">
-    <div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen py-10 px-4">
         <div class="max-w-4xl mx-auto">
-            <header class="text-center mb-12">
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl mb-2">防詐騙路由轉發系統</h1>
-                <p class="text-lg text-slate-500">Cloudflare Pages Functions Proxy</p>
-                
-                <div class="mt-6 inline-flex items-center bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
-                    <span class="flex h-2 w-2 relative mr-3">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    <span class="text-sm text-slate-500 mr-2">您的 IP Address:</span>
-                    <span class="text-sm font-mono font-bold text-indigo-600" id="user-ip">檢測中...</span>
+            <header class="text-center mb-10">
+                <h1 class="text-3xl font-extrabold text-slate-900 mb-2">路由轉發控制台</h1>
+                <div class="inline-block bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 text-sm text-left">
+                    <div>您的 IP: <span class="font-mono font-bold text-slate-700" id="user-ip">檢測中...</span></div>
+                    <div id="user-status" class="mt-1 text-xs">檢測中...</div>
                 </div>
             </header>
 
-            <!-- 路由卡片容器 -->
-            <div id="routes-container" class="space-y-6"></div>
+            <div id="routes-container" class="space-y-4 mb-10"></div>
 
-            <!-- 手動測試區塊 -->
-            <div class="mt-12">
-                <h2 class="text-xl font-bold text-slate-800 mb-4 border-l-4 border-indigo-500 pl-3">功能測試與除錯 (Debug Tools)</h2>
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <a href="/?debug=true" target="_blank" class="block p-4 border border-slate-200 rounded hover:bg-slate-50 transition text-center group">
-                            <div class="text-sm font-bold text-indigo-600 mb-1 group-hover:underline">/?debug=true</div>
-                            <div class="text-xs text-slate-500">查看根目錄轉發資訊</div>
-                        </a>
-                        <a href="/dr?debug=true" target="_blank" class="block p-4 border border-slate-200 rounded hover:bg-slate-50 transition text-center group">
-                            <div class="text-sm font-bold text-amber-600 mb-1 group-hover:underline">/dr?debug=true</div>
-                            <div class="text-xs text-slate-500">查看轉址 (Redirect) 資訊</div>
-                        </a>
-                        <a href="/test-path?debug=true" target="_blank" class="block p-4 border border-slate-200 rounded hover:bg-slate-50 transition text-center group">
-                            <div class="text-sm font-bold text-slate-600 mb-1 group-hover:underline">/test-path?debug=true</div>
-                            <div class="text-xs text-slate-500">測試任意路徑轉發</div>
-                        </a>
-                        <a href="/dr" target="_blank" class="block p-4 border border-amber-200 bg-amber-50 rounded hover:bg-amber-100 transition text-center group">
-                            <div class="text-sm font-bold text-amber-800 mb-1 group-hover:underline">執行 /dr</div>
-                            <div class="text-xs text-amber-700">立即執行跳轉 (302 Redirect)</div>
-                        </a>
-                        <a href="/" target="_blank" class="block p-4 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition text-center group">
-                            <div class="text-sm font-bold text-blue-800 mb-1 group-hover:underline">執行 / (Proxy)</div>
-                            <div class="text-xs text-blue-700">新分頁開啟代理頁面</div>
-                        </a>
-                    </div>
+            <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-6">
+                <h3 class="font-bold text-indigo-900 mb-4">快速測試工具</h3>
+                <div class="flex flex-wrap gap-3">
+                    <a href="/?debug=true" target="_blank" class="px-4 py-2 bg-white text-indigo-600 text-sm font-medium rounded border border-indigo-200 hover:bg-indigo-50">檢查根目錄路由</a>
+                    <a href="/dr?debug=true" target="_blank" class="px-4 py-2 bg-white text-amber-600 text-sm font-medium rounded border border-amber-200 hover:bg-amber-50">檢查 /dr 路由</a>
+                    <a href="/dashboard" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700">重新載入儀表板</a>
                 </div>
             </div>
 
-            <footer class="mt-12 text-center border-t border-slate-200 pt-8">
-                <p class="text-xs text-slate-400">
-                    系統白名單網段: <span class="font-mono">60.249.9.0/24</span><br>
-                    若需瀏覽此儀表板，請在網址後方加上 <code class="bg-slate-200 px-1 rounded text-slate-600">?dashboard=true</code>
-                </p>
+            <footer class="mt-10 text-center text-xs text-slate-400">
+                <p>白名單網段: <span class="font-mono">60.249.9.0/24</span>, <span class="font-mono">60.249.21.0/24</span>, <span class="font-mono">203.69.10.0/24</span></p>
+                <p>若要存取此頁面，請使用 <a href="/dashboard" class="underline">/dashboard</a> 路徑</p>
             </footer>
         </div>
     </div>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
