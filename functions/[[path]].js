@@ -1,15 +1,18 @@
 // functions/[[path]].js
 // 全域代理邏輯 (Catch-all Proxy Version)
-// 處理除了 /dr 與 /static 之外的所有路徑，確保 Vercel App 的子路徑也能正常運作
 
 import { isInCidr, INTERNAL_CIDRS, CONFIG } from './utils';
 
 export async function onRequest(context) {
   const request = context.request;
-  const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
   const url = new URL(request.url);
 
-  // 檢查是否為內部 IP
+  // 儀表板模式：允許訪問靜態資源 (React App)
+  if (url.searchParams.get('dashboard') === 'true') {
+    return context.next();
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
   const isInternalIP = INTERNAL_CIDRS.some(cidr => isInCidr(ip, cidr));
 
   // Debug 模式
@@ -24,7 +27,7 @@ export async function onRequest(context) {
   }
 
   if (isInternalIP) {
-    // 內部網路 -> GAS (GAS 通常只有單一執行點 exec，忽略 pathname，但保留 query)
+    // 內部網路 -> GAS
     const targetUrl = CONFIG.GAS_URL + url.search;
     
     const proxyHeaders = new Headers();
@@ -76,7 +79,7 @@ export async function onRequest(context) {
     }
 
   } else {
-    // 外部網路 -> Vercel (保留完整的 pathname 以支援多頁面或資源檔)
+    // 外部網路 -> Vercel
     const targetUrl = CONFIG.VERCEL_URL + url.pathname + url.search;
     
     const proxyHeaders = new Headers();

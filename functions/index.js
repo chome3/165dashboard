@@ -1,18 +1,24 @@
 // functions/index.js
 // 根目錄代理邏輯 (Proxy Version)
-// 確保訪問根目錄 (/) 時也能正確觸發代理機制
 
 import { isInCidr, INTERNAL_CIDRS, CONFIG } from './utils';
 
 export async function onRequest(context) {
   const request = context.request;
-  const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
   const url = new URL(request.url);
 
+  // 特殊功能：如果網址帶有 ?dashboard=true，則顯示 React 儀表板 (靜態資源)
+  // 這會跳過代理邏輯，直接執行 context.next() 載入 index.html
+  if (url.searchParams.get('dashboard') === 'true') {
+    return context.next();
+  }
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'N/A';
+  
   // 檢查是否為內部 IP
   const isInternalIP = INTERNAL_CIDRS.some(cidr => isInCidr(ip, cidr));
 
-  // Debug 模式 (?debug=true)
+  // Debug 模式 (?debug=true) - 純文字回傳路由資訊
   if (url.searchParams.get('debug') === 'true') {
     return new Response(
       `[Proxy Mode - Root]\n` +
@@ -30,7 +36,6 @@ export async function onRequest(context) {
     const targetUrl = CONFIG.GAS_URL + url.search;
     
     const proxyHeaders = new Headers();
-    // 轉發必要的標頭
     const allowedHeaders = ['accept', 'accept-language', 'user-agent', 'referer'];
     allowedHeaders.forEach(header => {
       const value = request.headers.get(header);
@@ -49,8 +54,6 @@ export async function onRequest(context) {
       const responseBody = await response.text();
       
       // 修復 GAS 回傳 HTML 中的相對路徑
-      // 將 /static/... 改寫為 https://script.google.com/static/... 
-      // 避免瀏覽器向我們的 Proxy 請求不存在的資源 (或者透過 functions/static/[[path]].js 處理)
       const fixedBody = responseBody
         .replace(/src="\/static\//g, `src="${CONFIG.GAS_BASE}/static/`)
         .replace(/href="\/static\//g, `href="${CONFIG.GAS_BASE}/static/`)
@@ -68,7 +71,6 @@ export async function onRequest(context) {
         responseHeaders.set('Content-Type', 'text/html; charset=utf-8');
       }
       
-      // 允許 CORS
       responseHeaders.set('Access-Control-Allow-Origin', '*');
       
       return new Response(fixedBody, {
@@ -85,9 +87,6 @@ export async function onRequest(context) {
     // ---------------------------------------------------------
     // 情境 B: 外部網路 -> 代理至 Vercel
     // ---------------------------------------------------------
-    
-    // 組合目標網址 (保留 pathname 與 search)
-    // 注意: 因為這是 index.js, pathname 通常是 /
     const targetUrl = CONFIG.VERCEL_URL + url.pathname + url.search;
     
     const proxyHeaders = new Headers();

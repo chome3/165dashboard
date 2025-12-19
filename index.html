@@ -1,26 +1,144 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
+<head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>防詐騙路由轉發系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.0"
-  }
-}
-</script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 定義路由資料
+            const routes = [
+                {
+                    path: "/",
+                    type: "Proxy",
+                    color: "blue",
+                    description: "根目錄代理 (Web Root)。根據來源 IP 透明轉發至 GAS (內網) 或 Vercel (外網)。",
+                    internalDest: "Google Apps Script (GAS)",
+                    externalDest: "Vercel Dashboard"
+                },
+                {
+                    path: "/dr",
+                    type: "Redirect",
+                    color: "amber",
+                    description: "直接轉址 (Direct Redirect)。回傳 HTTP 302 跳轉至對應目標。",
+                    internalDest: "Google Apps Script (GAS)",
+                    externalDest: "Vercel Dashboard"
+                },
+                {
+                    path: "/static/*",
+                    type: "Asset",
+                    color: "green",
+                    description: "靜態資源代理。處理 GAS 頁面中的 JS/CSS 檔案引用。",
+                    internalDest: "script.google.com/static/...",
+                    externalDest: "N/A (禁止存取)"
+                }
+            ];
+
+            // 取得使用者 IP (透過 Cloudflare trace)
+            const ipDisplay = document.getElementById('user-ip');
+            fetch('https://www.cloudflare.com/cdn-cgi/trace')
+                .then(res => res.text())
+                .then(data => {
+                    const ipLine = data.split('\n').find(l => l.startsWith('ip='));
+                    if (ipLine) {
+                        ipDisplay.innerText = ipLine.split('=')[1];
+                    }
+                })
+                .catch(() => {
+                    ipDisplay.innerText = '無法取得 (請檢查連線)';
+                });
+
+            // 渲染路由卡片
+            const container = document.getElementById('routes-container');
+            
+            routes.forEach(route => {
+                let badgeClass = '';
+                if (route.type === 'Proxy') badgeClass = 'bg-blue-100 text-blue-700';
+                else if (route.type === 'Redirect') badgeClass = 'bg-amber-100 text-amber-700';
+                else badgeClass = 'bg-green-100 text-green-700';
+
+                // 建立卡片
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow';
+                
+                // Debug 連結 (僅非靜態資源顯示)
+                const debugLink = route.path.includes('*') 
+                    ? '' 
+                    : `<a href="${route.path === '/' ? '/?debug=true' : route.path + '?debug=true'}" target="_blank" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 px-2 py-1 rounded">測試 Debug 模式 &rarr;</a>`;
+
+                card.innerHTML = `
+                    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                        <div class="flex items-center gap-3">
+                            <span class="font-mono text-lg font-bold text-slate-700">${route.path}</span>
+                            <span class="px-2 py-0.5 text-xs font-bold uppercase rounded-full ${badgeClass}">${route.type}</span>
+                        </div>
+                        ${debugLink}
+                    </div>
+                    
+                    <div class="p-6">
+                        <p class="text-slate-600 text-sm mb-6">${route.description}</p>
+                        
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <!-- 內網區塊 -->
+                            <div class="p-4 rounded border border-emerald-100 bg-emerald-50/50">
+                                <h3 class="text-xs font-bold uppercase text-emerald-700 mb-1 flex items-center">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2"></span>
+                                    內網 (Internal)
+                                </h3>
+                                <p class="text-sm font-medium text-emerald-900 truncate" title="${route.internalDest}">
+                                    &rarr; ${route.internalDest}
+                                </p>
+                            </div>
+
+                            <!-- 外網區塊 -->
+                            <div class="p-4 rounded border border-pink-100 bg-pink-50/50">
+                                <h3 class="text-xs font-bold uppercase text-pink-700 mb-1 flex items-center">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-pink-500 mr-2"></span>
+                                    外網 (External)
+                                </h3>
+                                <p class="text-sm font-medium text-pink-900 truncate" title="${route.externalDest}">
+                                    &rarr; ${route.externalDest}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        });
+    </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+<body class="bg-slate-100 text-slate-800 font-sans">
+    <div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-4xl mx-auto">
+            <header class="text-center mb-12">
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl mb-2">防詐騙路由轉發系統</h1>
+                <p class="text-lg text-slate-500">Cloudflare Pages Functions Proxy</p>
+                
+                <div class="mt-6 inline-flex items-center bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200">
+                    <span class="flex h-2 w-2 relative mr-3">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    <span class="text-sm text-slate-500 mr-2">您的 IP Address:</span>
+                    <span class="text-sm font-mono font-bold text-indigo-600" id="user-ip">檢測中...</span>
+                </div>
+            </header>
+
+            <div id="routes-container" class="space-y-6">
+                <!-- Javascript 內容 -->
+            </div>
+
+            <footer class="mt-12 text-center border-t border-slate-200 pt-8">
+                <p class="text-xs text-slate-400">
+                    系統白名單網段: <span class="font-mono">60.249.9.0/24</span><br>
+                    若需瀏覽此儀表板，請在網址後方加上 <code class="bg-slate-200 px-1 rounded text-slate-600">?dashboard=true</code>
+                </p>
+            </footer>
+        </div>
+    </div>
+<script type="module" src="/index.tsx"></script>
+</body>
 </html>
