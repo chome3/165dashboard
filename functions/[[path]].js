@@ -23,13 +23,29 @@ export async function onRequest(context) {
     return new Response('Forbidden', { status: 403 });
   }
 
+  // 只代理 GAS 相關的路徑（避免攔截到其他不相關的路徑）
+  const gasResourcePaths = [
+    '/static/',
+    '/userCodeAppPanel',
+    '/wardeninit',
+    '/jserror',
+    '/a/macros/',
+    '/macros/'
+  ];
+
+  const isGasResource = gasResourcePaths.some(prefix => url.pathname.startsWith(prefix));
+
+  if (!isGasResource) {
+    // 不是 GAS 資源，返回 404
+    return new Response('Not Found', { status: 404 });
+  }
+
   // 構建 Google Script 的完整 URL
   const gasBaseUrl = 'https://script.google.com';
   const targetUrl = gasBaseUrl + url.pathname + url.search;
 
-  // 代理請求
   const proxyHeaders = new Headers();
-  const allowedHeaders = [
+  [
     'accept',
     'accept-encoding',
     'accept-language',
@@ -37,10 +53,8 @@ export async function onRequest(context) {
     'referer',
     'if-none-match',
     'if-modified-since',
-    'cookie'  // 保留 cookie
-  ];
-  
-  allowedHeaders.forEach(header => {
+    'cookie'
+  ].forEach(header => {
     const value = request.headers.get(header);
     if (value) proxyHeaders.set(header, value);
   });
@@ -53,17 +67,11 @@ export async function onRequest(context) {
 
   const response = await fetch(modifiedRequest);
 
-  // 複製響應標頭
   const responseHeaders = new Headers(response.headers);
-  
-  // 移除可能干擾的標頭
   responseHeaders.delete('X-Frame-Options');
   responseHeaders.delete('Content-Security-Policy');
-  
-  // 添加 CORS 標頭
   responseHeaders.set('Access-Control-Allow-Origin', '*');
   responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  responseHeaders.set('Access-Control-Allow-Headers', '*');
 
   return new Response(response.body, {
     status: response.status,

@@ -26,17 +26,18 @@ export async function onRequest(context) {
     return new Response(
       `IP: ${ip}\n` +
       `isInternalIP: ${isInternalIP}\n` +
-      `CIDRs: ${cidrs.join(', ')}`,
+      `URL: ${url.href}\n` +
+      `Target: ${isInternalIP ? gasUrl : vercelUrl}`,
       { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
     );
   }
 
   if (isInternalIP) {
+    // 內網：代理到 GAS 主頁面
     const targetUrl = gasUrl + url.search;
     
     const proxyHeaders = new Headers();
-    const allowedHeaders = ['accept', 'accept-language', 'user-agent', 'referer', 'cookie'];
-    allowedHeaders.forEach(header => {
+    ['accept', 'accept-language', 'user-agent', 'referer', 'cookie'].forEach(header => {
       const value = request.headers.get(header);
       if (value) proxyHeaders.set(header, value);
     });
@@ -50,17 +51,10 @@ export async function onRequest(context) {
     
     const response = await fetch(modifiedRequest);
     
-    // 不修改 HTML，直接返回原始內容
     const responseHeaders = new Headers(response.headers);
-    
-    // 移除干擾標頭
     responseHeaders.delete('X-Frame-Options');
     responseHeaders.delete('Content-Security-Policy');
-    
-    // 添加 CORS
     responseHeaders.set('Access-Control-Allow-Origin', '*');
-    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    responseHeaders.set('Access-Control-Allow-Headers', '*');
     
     return new Response(response.body, {
       status: response.status,
@@ -68,7 +62,7 @@ export async function onRequest(context) {
       headers: responseHeaders,
     });
   } else {
-    // 外網：直接轉向 Vercel（或用代理）
+    // 外網：轉向 Vercel
     return Response.redirect(vercelUrl + url.pathname + url.search, 302);
   }
 }
