@@ -108,7 +108,6 @@
             });
         });
     </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans">
     <div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
@@ -127,8 +126,36 @@
                 </div>
             </header>
 
-            <div id="routes-container" class="space-y-6">
-                <!-- Javascript 內容 -->
+            <!-- 路由卡片容器 -->
+            <div id="routes-container" class="space-y-6"></div>
+
+            <!-- 手動測試區塊 -->
+            <div class="mt-12">
+                <h2 class="text-xl font-bold text-slate-800 mb-4 border-l-4 border-indigo-500 pl-3">功能測試與除錯 (Debug Tools)</h2>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <a href="/?debug=true" target="_blank" class="block p-4 border border-slate-200 rounded hover:bg-slate-50 transition text-center group">
+                            <div class="text-sm font-bold text-indigo-600 mb-1 group-hover:underline">/?debug=true</div>
+                            <div class="text-xs text-slate-500">查看根目錄轉發資訊</div>
+                        </a>
+                        <a href="/dr?debug=true" target="_blank" class="block p-4 border border-slate-200 rounded hover:bg-slate-50 transition text-center group">
+                            <div class="text-sm font-bold text-amber-600 mb-1 group-hover:underline">/dr?debug=true</div>
+                            <div class="text-xs text-slate-500">查看轉址 (Redirect) 資訊</div>
+                        </a>
+                        <a href="/test-path?debug=true" target="_blank" class="block p-4 border border-slate-200 rounded hover:bg-slate-50 transition text-center group">
+                            <div class="text-sm font-bold text-slate-600 mb-1 group-hover:underline">/test-path?debug=true</div>
+                            <div class="text-xs text-slate-500">測試任意路徑轉發</div>
+                        </a>
+                        <a href="/dr" target="_blank" class="block p-4 border border-amber-200 bg-amber-50 rounded hover:bg-amber-100 transition text-center group">
+                            <div class="text-sm font-bold text-amber-800 mb-1 group-hover:underline">執行 /dr</div>
+                            <div class="text-xs text-amber-700">立即執行跳轉 (302 Redirect)</div>
+                        </a>
+                        <a href="/" target="_blank" class="block p-4 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition text-center group">
+                            <div class="text-sm font-bold text-blue-800 mb-1 group-hover:underline">執行 / (Proxy)</div>
+                            <div class="text-xs text-blue-700">新分頁開啟代理頁面</div>
+                        </a>
+                    </div>
+                </div>
             </div>
 
             <footer class="mt-12 text-center border-t border-slate-200 pt-8">
@@ -139,6 +166,5 @@
             </footer>
         </div>
     </div>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
