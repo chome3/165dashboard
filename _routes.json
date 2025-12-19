@@ -1,8 +1,10 @@
 {
   "version": 1,
   "include": [
-    "/proxy",
-    "/static/*"
+    "/*"
   ],
-  "exclude": []
+  "exclude": [
+    "/assets/*",
+    "/favicon.ico"
+  ]
 }

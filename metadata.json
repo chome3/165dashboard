@@ -1,0 +1,5 @@
+{
+  "name": "Anti-Scam Routing Proxy",
+  "description": "A dual-mode proxy and redirect application for internal and external traffic routing using Cloudflare Pages Functions.",
+  "requestFramePermissions": []
+}
