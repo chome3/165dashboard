@@ -1,4 +1,5 @@
-$indexContent = @'
+// functions/index.js
+
 function ipToInt(ip) {
   return ip.split('.').reduce((acc, part) => (acc << 8) + Number(part), 0) >>> 0;
 }
@@ -106,6 +107,3 @@ export async function onRequest(context) {
     });
   }
 }
-'@
-
-[System.IO.File]::WriteAllText("$PWD\functions\index.js", $indexContent, [System.Text.UTF8Encoding]::new($false))
